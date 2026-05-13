@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Foreground service for media playback (Android 14+ requires explicit type). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <application>
+    <!-- Add MediaSessionService subclass here when wiring foreground playback:
+         <service android:name=".PlayUpPlaybackService"
+                  android:foregroundServiceType="mediaPlayback"
+                  android:exported="true">
+           <intent-filter>
+             <action android:name="androidx.media3.session.MediaSessionService" />
+           </intent-filter>
+         </service>
+    -->
+  </application>
+</manifest>
