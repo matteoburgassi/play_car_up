@@ -280,12 +280,12 @@ function toMedia(r: GalaxyRawItem): Media | null {
     r.preview_medium ??
     r.preview_small ??
     '';
-  const firstAuthor =
+  const firstArtist =
+    extractFirstName(r.artists) ??
     extractFirstName(r.authors) ??
-    extractFirstName(r.author_list) ??
-    extractFirstName(r.artists);
+    extractFirstName(r.author_list);
   const artist =
-    firstAuthor ??
+    firstArtist ??
     r.artist ??
     r.author ??
     r.artist_label ??
