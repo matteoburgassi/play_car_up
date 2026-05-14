@@ -92,30 +92,51 @@ function applyEnvOverrides(cfg: SmartConfig, env: GalaxyEnv): SmartConfig {
 }
 
 /**
- * SmartConfig returns a nested config blob. We pluck the fields we need,
- * tolerating either flat or wrapped (`{ configuration: {...} }`) shapes.
+ * SmartConfig response shape (relevant subset):
+ *   { commonConfig: { galaxy: { campaignID, countryCode, languageCode?, baseUrl?,
+ *                               rubrics: [{ name, id, type }] } } }
+ * We pluck targeting fields from there, with tolerant fallbacks for older shapes.
  */
 function extractSmartConfig(raw: Record<string, unknown>): SmartConfig {
   const root = pickObject(raw, ['configuration', 'config', 'data']) ?? raw;
-  const galaxy = pickObject(root, ['galaxy', 'galaxy_api', 'publishing']) ?? root;
-  const targeting = pickObject(root, ['targeting', 'rubric', 'defaults']) ?? root;
+  const common = pickObject(root, ['commonConfig', 'common_config']) ?? root;
+  const galaxy = pickObject(common, ['galaxy', 'galaxy_api', 'publishing']) ?? common;
+  const rubric = pickFirstRubric(galaxy);
+
   return {
-    galaxyBaseUrl: pickString(galaxy, ['base_url', 'baseUrl', 'url', 'host']) ?? '',
+    galaxyBaseUrl:
+      pickString(galaxy, ['baseUrl', 'base_url', 'url', 'host']) ??
+      pickString(common, ['galaxyBaseUrl']) ??
+      '',
     rubricPath:
-      pickString(galaxy, ['rubric_path', 'rubricPath']) ?? '/publishing-rubric-list',
+      pickString(galaxy, ['rubricPath', 'rubric_path']) ?? '/publishing-rubric-list',
     campaignId:
-      pickString(targeting, ['campaign_id', 'campaignId']) ?? pickString(root, ['campaign_id']) ?? '',
+      pickString(galaxy, ['campaignID', 'campaignId', 'campaign_id']) ??
+      pickString(root, ['campaign_id']) ??
+      '',
     languageCode:
-      pickString(targeting, ['language_code', 'languageCode', 'language']) ??
+      pickString(galaxy, ['languageCode', 'language_code', 'language']) ??
+      pickString(common, ['languageCode', 'language_code', 'language']) ??
       pickString(root, ['language_code']) ??
       '',
     countryCode:
-      pickString(targeting, ['country_code', 'countryCode', 'country']) ??
+      pickString(galaxy, ['countryCode', 'country_code', 'country']) ??
+      pickString(common, ['countryCode', 'country_code', 'country']) ??
       pickString(root, ['country_code']) ??
       '',
     rubricId:
-      pickString(targeting, ['rubric_id', 'rubricId']) ?? pickString(root, ['rubric_id']) ?? '',
+      (rubric ? pickString(rubric, ['id', 'rubric_id', 'rubricId']) : undefined) ?? '',
   };
+}
+
+function pickFirstRubric(galaxy: Record<string, unknown>): Record<string, unknown> | null {
+  const rubrics = galaxy['rubrics'];
+  if (!Array.isArray(rubrics) || rubrics.length === 0) return null;
+  const home = rubrics.find(
+    (r) => r && typeof r === 'object' && (r as Record<string, unknown>).name === 'home',
+  );
+  const chosen = (home ?? rubrics[0]) as unknown;
+  return chosen && typeof chosen === 'object' ? (chosen as Record<string, unknown>) : null;
 }
 
 function pickObject(o: Record<string, unknown>, keys: string[]): Record<string, unknown> | null {
