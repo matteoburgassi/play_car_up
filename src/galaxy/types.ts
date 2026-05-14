@@ -3,6 +3,10 @@ import { z } from 'zod';
 export const SmartConfigSchema = z.object({
   galaxyBaseUrl: z.string().url(),
   rubricPath: z.string().default('/publishing-rubric-list'),
+  campaignId: z.string(),
+  languageCode: z.string(),
+  countryCode: z.string(),
+  rubricId: z.string(),
 });
 export type SmartConfig = z.infer<typeof SmartConfigSchema>;
 
@@ -32,10 +36,6 @@ export const GalaxyResponseSchema = z.object({
 });
 export type GalaxyResponse = z.infer<typeof GalaxyResponseSchema>;
 
-/**
- * Raw Galaxy API row shape (subset). Galaxy returns much more — we project
- * only what the player needs and tolerate missing fields.
- */
 export const GalaxyRawItemSchema = z
   .object({
     id: z.union([z.string(), z.number()]).optional(),

@@ -15,40 +15,40 @@ import { MOCK_GALAXY, MOCK_SMART_CONFIG } from './mock';
 
 export type GalaxyMode = 'mock' | 'live';
 
+/**
+ * Credentials live in `.env`. Targeting parameters (campaign, language,
+ * country, rubric) come from SmartConfig at runtime.
+ */
 export interface GalaxyEnv {
   smartConfigUrl?: string;
-  galaxyBaseUrl?: string;
   apiKey?: string;
   apiSecretKey?: string;
-  campaignId?: string;
-  languageCode?: string;
-  countryCode?: string;
-  rubricId?: string;
 }
 
 export function resolveMode(env: GalaxyEnv): GalaxyMode {
-  return env.galaxyBaseUrl && env.apiKey && env.apiSecretKey ? 'live' : 'mock';
+  return env.apiKey && env.apiSecretKey ? 'live' : 'mock';
 }
 
 export async function loadSmartConfig(env: GalaxyEnv): Promise<SmartConfig> {
   if (resolveMode(env) === 'mock') return MOCK_SMART_CONFIG;
-  if (env.smartConfigUrl) {
-    const res = await fetch(env.smartConfigUrl);
-    if (!res.ok) throw new Error(`SmartConfig failed: ${res.status}`);
-    return SmartConfigSchema.parse(await res.json());
+  if (!env.smartConfigUrl) {
+    throw new Error('VITE_SMARTCONFIG_URL is required in live mode');
   }
-  return SmartConfigSchema.parse({ galaxyBaseUrl: env.galaxyBaseUrl! });
+  const res = await fetch(env.smartConfigUrl, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`SmartConfig failed: ${res.status}`);
+  return SmartConfigSchema.parse(await res.json());
 }
 
 export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {
   const base = `${config.galaxyBaseUrl.replace(/\/$/, '')}${config.rubricPath}`;
-  const params = new URLSearchParams();
-  if (env.apiKey) params.set('api_key', env.apiKey);
-  if (env.apiSecretKey) params.set('api_secret_key', env.apiSecretKey);
-  if (env.campaignId) params.set('campaign_id', env.campaignId);
-  if (env.languageCode) params.set('language_code', env.languageCode);
-  if (env.countryCode) params.set('country_code', env.countryCode);
-  if (env.rubricId) params.set('rubric_id', env.rubricId);
+  const params = new URLSearchParams({
+    api_key: env.apiKey ?? '',
+    api_secret_key: env.apiSecretKey ?? '',
+    campaign_id: config.campaignId,
+    language_code: config.languageCode,
+    country_code: config.countryCode,
+    rubric_id: config.rubricId,
+  });
   return `${base}?${params.toString()}`;
 }
 
