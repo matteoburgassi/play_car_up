@@ -44,7 +44,7 @@ export const GalaxyRawItemSchema = z
   .object({
     id: z.union([z.string(), z.number()]).optional(),
     media_id: z.union([z.string(), z.number()]).optional(),
-    rubric_id: z.union([z.string(), z.number()]).optional(),
+    rubric_id: z.union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))]).optional(),
     title: z.string().optional(),
     name: z.string().optional(),
     rubric_label: z.string().optional(),
@@ -64,16 +64,20 @@ export const GalaxyRawItemSchema = z
     stream_url: z.string().optional(),
     url: z.string().optional(),
     rubric_content_type: z.array(z.string()).optional(),
-    deliveries: z
-      .array(
-        z.object({
-          url: z.string(),
-          mime: z.string().optional(),
-          extension: z.string().optional(),
-          kind: z.string().optional(),
-        }),
-      )
-      .optional(),
+    content_id: z.union([z.string(), z.number()]).optional(),
+    content_type: z.string().optional(),
+    content_type_tech_label: z.string().optional(),
+    provider_label: z.string().optional(),
+    editor_label: z.string().optional(),
+    artist_label: z.string().optional(),
+    /**
+     * Deliveries can be:
+     *  - an array of `{ url, mime?, extension?, kind? }` (legacy shape), or
+     *  - an object `{ download: {default: [...]}, preview: {default: [...]}, mainDelivery: {...}, additionalDeliveries: [...] }`
+     * We accept anything and resolve the shape in the normalizer.
+     */
+    deliveries: z.unknown().optional(),
+    assets: z.unknown().optional(),
   })
   .passthrough();
 export type GalaxyRawItem = z.infer<typeof GalaxyRawItemSchema>;

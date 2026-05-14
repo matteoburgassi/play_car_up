@@ -250,17 +250,20 @@ function extractItemList(raw: GalaxyRawResponse): GalaxyRawItem[] {
 }
 
 function toMedia(r: GalaxyRawItem): Media | null {
-  const id = String(r.id ?? r.media_id ?? r.rubric_id ?? '');
+  const rubricIdScalar =
+    Array.isArray(r.rubric_id) ? undefined : (r.rubric_id as string | number | undefined);
+  const id = String(r.content_id ?? r.id ?? r.media_id ?? rubricIdScalar ?? '');
   const title = r.title ?? r.name ?? r.rubric_label ?? r.rubric_title ?? '';
   if (!id || !title) return null;
-  const deliveries: StreamDelivery[] = (r.deliveries ?? []).map((d) => ({
-    url: d.url,
-    mime: d.mime,
-    extension: d.extension,
-    kind: normalizeKind(d.kind),
-  }));
-  const streamUrl = r.stream_url ?? r.url;
-  const typeRaw = (r.media_type ?? r.type ?? 'audio').toLowerCase();
+  const deliveries: StreamDelivery[] = extractDeliveries(r.deliveries);
+  const streamUrl = r.stream_url ?? r.url ?? deliveries.find((d) => d.kind === 'full')?.url;
+  const typeRaw = (
+    r.media_type ??
+    r.type ??
+    r.content_type_tech_label ??
+    r.content_type ??
+    'audio'
+  ).toLowerCase();
   const type: Media['type'] = typeRaw.includes('video') ? 'video' : 'audio';
   const durationMs =
     typeof r.duration_ms === 'number'
@@ -272,12 +275,18 @@ function toMedia(r: GalaxyRawItem): Media | null {
     r.artwork_url ??
     r.image_url ??
     r.thumbnail ??
+    extractCoverUrl(r.assets) ??
     r.preview_large ??
     r.preview_medium ??
     r.preview_small ??
     '';
   const artist =
-    r.artist ?? r.author ?? (r.rubric_content_type?.filter(Boolean).join(', ') ?? '');
+    r.artist ??
+    r.author ??
+    r.artist_label ??
+    r.editor_label ??
+    r.provider_label ??
+    (r.rubric_content_type?.filter(Boolean).join(', ') ?? '');
   return {
     id,
     title,
@@ -288,6 +297,70 @@ function toMedia(r: GalaxyRawItem): Media | null {
     deliveries,
     streamUrl,
   };
+}
+
+interface DeliveryEntry {
+  url?: unknown;
+  mime?: unknown;
+  extension?: unknown;
+  type?: unknown;
+  preview?: unknown;
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function extractDeliveries(raw: unknown): StreamDelivery[] {
+  if (!raw) return [];
+  const collected: DeliveryEntry[] = [];
+
+  if (Array.isArray(raw)) {
+    for (const e of raw) if (isObject(e)) collected.push(e as DeliveryEntry);
+  } else if (isObject(raw)) {
+    if (isObject(raw.mainDelivery)) collected.push(raw.mainDelivery as DeliveryEntry);
+    if (Array.isArray(raw.additionalDeliveries)) {
+      for (const e of raw.additionalDeliveries) if (isObject(e)) collected.push(e as DeliveryEntry);
+    }
+    for (const [bucket, value] of Object.entries(raw)) {
+      if (bucket === 'mainDelivery' || bucket === 'additionalDeliveries') continue;
+      if (isObject(value)) {
+        for (const list of Object.values(value)) {
+          if (Array.isArray(list)) {
+            for (const e of list) if (isObject(e)) collected.push(e as DeliveryEntry);
+          }
+        }
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  const out: StreamDelivery[] = [];
+  for (const e of collected) {
+    if (typeof e.url !== 'string' || !e.url) continue;
+    if (seen.has(e.url)) continue;
+    seen.add(e.url);
+    const ext = typeof e.extension === 'string' ? e.extension : undefined;
+    const mime = typeof e.mime === 'string' ? e.mime : undefined;
+    const kindHint =
+      e.preview === true
+        ? 'preview'
+        : typeof e.type === 'string'
+          ? e.type
+          : undefined;
+    out.push({ url: e.url, mime, extension: ext, kind: normalizeKind(kindHint) });
+  }
+  return out;
+}
+
+function extractCoverUrl(assets: unknown): string | undefined {
+  if (!isObject(assets)) return undefined;
+  const cover = assets.cover;
+  if (!Array.isArray(cover)) return undefined;
+  for (const c of cover) {
+    if (isObject(c) && typeof c.url === 'string' && c.url) return c.url;
+  }
+  return undefined;
 }
 
 function normalizeKind(k?: string): StreamDelivery['kind'] {
