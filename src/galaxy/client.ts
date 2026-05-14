@@ -49,7 +49,10 @@ function viaDevProxy(rawUrl: string, prefix: '/smartconfig-proxy' | '/galaxy-pro
   if (rawUrl.startsWith('/')) return rawUrl;
   try {
     const u = new URL(rawUrl);
-    return `${prefix}${u.pathname}${u.search}${u.hash}`;
+    // For galaxy, the rubric path is appended separately, so we drop the
+    // upstream pathname to avoid producing `/galaxy-proxy/<path>/publishing-...`.
+    const pathname = prefix === '/galaxy-proxy' ? '' : u.pathname;
+    return `${prefix}${pathname}${u.search}${u.hash}`;
   } catch {
     return rawUrl;
   }
