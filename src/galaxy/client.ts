@@ -159,21 +159,38 @@ function pickString(o: Record<string, unknown>, keys: string[]): string | undefi
   return undefined;
 }
 
-export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {
+const AUDIO_CONTENT_TYPES = new Set(['audio single', 'audio track']);
+
+function galaxyEndpoint(config: SmartConfig, path: string): string {
   const galaxyBase = viaDevProxy(config.galaxyBaseUrl, '/galaxy-proxy').replace(/\/+$/, '');
-  const rubricPath = config.rubricPath.startsWith('/')
-    ? config.rubricPath
-    : `/${config.rubricPath}`;
-  const base = `${galaxyBase}${rubricPath}`;
-  const params = new URLSearchParams({
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  return `${galaxyBase}${suffix}`;
+}
+
+function commonGalaxyParams(env: GalaxyEnv, config: SmartConfig): URLSearchParams {
+  return new URLSearchParams({
     api_key: env.apiKey ?? '',
     api_secret_key: env.apiSecretKey ?? '',
     campaign_id: config.campaignId,
     language_code: config.languageCode,
     country_code: config.countryCode,
-    rubric_id: config.rubricId,
   });
-  return `${base}?${params.toString()}`;
+}
+
+export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {
+  const params = commonGalaxyParams(env, config);
+  params.set('rubric_id', config.rubricId);
+  return `${galaxyEndpoint(config, config.rubricPath)}?${params.toString()}`;
+}
+
+export function buildContentListUrl(
+  env: GalaxyEnv,
+  config: SmartConfig,
+  rubricId: string,
+): string {
+  const params = commonGalaxyParams(env, config);
+  params.set('rubric_id', rubricId);
+  return `${galaxyEndpoint(config, '/publishing-content-list')}?${params.toString()}`;
 }
 
 export async function fetchGalaxyRubric(
@@ -185,14 +202,39 @@ export async function fetchGalaxyRubric(
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`Galaxy rubric failed: ${res.status}`);
   const raw = GalaxyRawResponseSchema.parse(await res.json());
-  return GalaxyResponseSchema.parse(normalizeGalaxy(raw));
+
+  const rubricList = extractItemList(raw);
+  const audioRubrics = rubricList.filter(isAudioRubric);
+
+  const contentLists = await Promise.all(
+    audioRubrics.map(async (r) => {
+      const rubricId = String(r.rubric_id ?? r.id ?? '');
+      if (!rubricId) return [] as GalaxyRawItem[];
+      try {
+        const cRes = await fetch(buildContentListUrl(env, config, rubricId), {
+          headers: { Accept: 'application/json' },
+        });
+        if (!cRes.ok) return [];
+        const cRaw = GalaxyRawResponseSchema.parse(await cRes.json());
+        return extractItemList(cRaw);
+      } catch {
+        return [];
+      }
+    }),
+  );
+
+  const items: Media[] = contentLists
+    .flat()
+    .map(toMedia)
+    .filter((m): m is Media => !!m);
+
+  const rubric = raw.rubric_label ?? raw.rubric_name ?? raw.name ?? 'Featured';
+  return GalaxyResponseSchema.parse({ rubric, items });
 }
 
-function normalizeGalaxy(raw: GalaxyRawResponse): GalaxyResponse {
-  const list = extractItemList(raw);
-  const items: Media[] = list.map(toMedia).filter((m): m is Media => !!m);
-  const rubric = raw.rubric_label ?? raw.rubric_name ?? raw.name ?? 'Featured';
-  return { rubric, items };
+function isAudioRubric(r: GalaxyRawItem): boolean {
+  const types = r.rubric_content_type ?? [];
+  return types.some((t) => AUDIO_CONTENT_TYPES.has(t.trim().toLowerCase()));
 }
 
 function extractItemList(raw: GalaxyRawResponse): GalaxyRawItem[] {
