@@ -27,6 +27,12 @@ export interface GalaxyEnv {
   smartConfigWantedVersion?: string;
   apiKey?: string;
   apiSecretKey?: string;
+  /** Fallback targeting overrides if SmartConfig omits them. */
+  campaignId?: string;
+  languageCode?: string;
+  countryCode?: string;
+  rubricId?: string;
+  rubricPath?: string;
 }
 
 export function resolveMode(env: GalaxyEnv): GalaxyMode {
@@ -71,7 +77,18 @@ export async function loadSmartConfig(env: GalaxyEnv): Promise<SmartConfig> {
   });
   if (!res.ok) throw new Error(`SmartConfig failed: ${res.status}`);
   const raw = (await res.json()) as Record<string, unknown>;
-  return SmartConfigSchema.parse(extractSmartConfig(raw));
+  return SmartConfigSchema.parse(applyEnvOverrides(extractSmartConfig(raw), env));
+}
+
+function applyEnvOverrides(cfg: SmartConfig, env: GalaxyEnv): SmartConfig {
+  return {
+    galaxyBaseUrl: cfg.galaxyBaseUrl,
+    rubricPath: env.rubricPath || cfg.rubricPath,
+    campaignId: cfg.campaignId || env.campaignId || '',
+    languageCode: cfg.languageCode || env.languageCode || '',
+    countryCode: cfg.countryCode || env.countryCode || '',
+    rubricId: cfg.rubricId || env.rubricId || '',
+  };
 }
 
 /**

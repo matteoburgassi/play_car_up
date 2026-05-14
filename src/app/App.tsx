@@ -20,6 +20,11 @@ const env: GalaxyEnv = {
     (import.meta.env.VITE_SMARTCONFIG_WANTED_VERSION as string) || undefined,
   apiKey: (import.meta.env.VITE_GALAXY_API_KEY as string) || undefined,
   apiSecretKey: (import.meta.env.VITE_GALAXY_API_SECRET_KEY as string) || undefined,
+  campaignId: (import.meta.env.VITE_GALAXY_CAMPAIGN_ID as string) || undefined,
+  languageCode: (import.meta.env.VITE_GALAXY_LANGUAGE_CODE as string) || undefined,
+  countryCode: (import.meta.env.VITE_GALAXY_COUNTRY_CODE as string) || undefined,
+  rubricId: (import.meta.env.VITE_GALAXY_RUBRIC_ID as string) || undefined,
+  rubricPath: (import.meta.env.VITE_GALAXY_RUBRIC_PATH as string) || undefined,
 };
 
 export function App() {
