@@ -5,6 +5,7 @@ import path from 'node:path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const galaxyTarget = env.VITE_GALAXY_PROXY_TARGET || 'https://galaxy-api.galaxydve.com';
+  const smartConfigTarget = env.VITE_SMARTCONFIG_PROXY_TARGET || 'https://smartconfig.dvetech.fr';
   return {
     plugins: [react()],
     resolve: {
@@ -17,6 +18,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: true,
           rewrite: (p) => p.replace(/^\/galaxy-proxy/, ''),
+        },
+        '/smartconfig-proxy': {
+          target: smartConfigTarget,
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p) => p.replace(/^\/smartconfig-proxy/, ''),
         },
       },
     },

@@ -12,6 +12,12 @@ import { recordPlay } from '@/lib/playHistory';
 
 const env: GalaxyEnv = {
   smartConfigUrl: (import.meta.env.VITE_SMARTCONFIG_URL as string) || undefined,
+  smartConfigLogin: (import.meta.env.VITE_SMARTCONFIG_LOGIN as string) || undefined,
+  smartConfigPass: (import.meta.env.VITE_SMARTCONFIG_PASS as string) || undefined,
+  smartConfigApplicationId:
+    (import.meta.env.VITE_SMARTCONFIG_APPLICATION_ID as string) || undefined,
+  smartConfigWantedVersion:
+    (import.meta.env.VITE_SMARTCONFIG_WANTED_VERSION as string) || undefined,
   apiKey: (import.meta.env.VITE_GALAXY_API_KEY as string) || undefined,
   apiSecretKey: (import.meta.env.VITE_GALAXY_API_SECRET_KEY as string) || undefined,
 };

@@ -16,27 +16,86 @@ import { MOCK_GALAXY, MOCK_SMART_CONFIG } from './mock';
 export type GalaxyMode = 'mock' | 'live';
 
 /**
- * Credentials live in `.env`. Targeting parameters (campaign, language,
- * country, rubric) come from SmartConfig at runtime.
+ * Galaxy credentials live in `.env`. Targeting parameters (campaign, language,
+ * country, rubric, base URL) come from SmartConfig at runtime.
  */
 export interface GalaxyEnv {
   smartConfigUrl?: string;
+  smartConfigLogin?: string;
+  smartConfigPass?: string;
+  smartConfigApplicationId?: string;
+  smartConfigWantedVersion?: string;
   apiKey?: string;
   apiSecretKey?: string;
 }
 
 export function resolveMode(env: GalaxyEnv): GalaxyMode {
-  return env.apiKey && env.apiSecretKey ? 'live' : 'mock';
+  return env.apiKey && env.apiSecretKey && env.smartConfigUrl ? 'live' : 'mock';
+}
+
+export function buildSmartConfigUrl(env: GalaxyEnv): string {
+  const params = new URLSearchParams({
+    login: env.smartConfigLogin ?? '',
+    pass: env.smartConfigPass ?? '',
+    application_id: env.smartConfigApplicationId ?? '',
+    wanted_version: env.smartConfigWantedVersion ?? '',
+  });
+  return `${env.smartConfigUrl}?${params.toString()}`;
 }
 
 export async function loadSmartConfig(env: GalaxyEnv): Promise<SmartConfig> {
   if (resolveMode(env) === 'mock') return MOCK_SMART_CONFIG;
-  if (!env.smartConfigUrl) {
-    throw new Error('VITE_SMARTCONFIG_URL is required in live mode');
-  }
-  const res = await fetch(env.smartConfigUrl, { headers: { Accept: 'application/json' } });
+  const res = await fetch(buildSmartConfigUrl(env), {
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  });
   if (!res.ok) throw new Error(`SmartConfig failed: ${res.status}`);
-  return SmartConfigSchema.parse(await res.json());
+  const raw = (await res.json()) as Record<string, unknown>;
+  return SmartConfigSchema.parse(extractSmartConfig(raw));
+}
+
+/**
+ * SmartConfig returns a nested config blob. We pluck the fields we need,
+ * tolerating either flat or wrapped (`{ configuration: {...} }`) shapes.
+ */
+function extractSmartConfig(raw: Record<string, unknown>): SmartConfig {
+  const root = pickObject(raw, ['configuration', 'config', 'data']) ?? raw;
+  const galaxy = pickObject(root, ['galaxy', 'galaxy_api', 'publishing']) ?? root;
+  const targeting = pickObject(root, ['targeting', 'rubric', 'defaults']) ?? root;
+  return {
+    galaxyBaseUrl: pickString(galaxy, ['base_url', 'baseUrl', 'url', 'host']) ?? '',
+    rubricPath:
+      pickString(galaxy, ['rubric_path', 'rubricPath']) ?? '/publishing-rubric-list',
+    campaignId:
+      pickString(targeting, ['campaign_id', 'campaignId']) ?? pickString(root, ['campaign_id']) ?? '',
+    languageCode:
+      pickString(targeting, ['language_code', 'languageCode', 'language']) ??
+      pickString(root, ['language_code']) ??
+      '',
+    countryCode:
+      pickString(targeting, ['country_code', 'countryCode', 'country']) ??
+      pickString(root, ['country_code']) ??
+      '',
+    rubricId:
+      pickString(targeting, ['rubric_id', 'rubricId']) ?? pickString(root, ['rubric_id']) ?? '',
+  };
+}
+
+function pickObject(o: Record<string, unknown>, keys: string[]): Record<string, unknown> | null {
+  for (const k of keys) {
+    const v = o[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+  }
+  return null;
+}
+
+function pickString(o: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === 'string' && v.length > 0) return v;
+    if (typeof v === 'number') return String(v);
+  }
+  return undefined;
 }
 
 export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {

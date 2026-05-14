@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const SmartConfigSchema = z.object({
-  galaxyBaseUrl: z.string().url(),
+  galaxyBaseUrl: z.string(),
   rubricPath: z.string().default('/publishing-rubric-list'),
   campaignId: z.string(),
   languageCode: z.string(),
@@ -9,6 +9,10 @@ export const SmartConfigSchema = z.object({
   rubricId: z.string(),
 });
 export type SmartConfig = z.infer<typeof SmartConfigSchema>;
+
+/** Raw SmartConfig response is opaque; we extract known fields. */
+export const SmartConfigRawSchema = z.record(z.unknown());
+export type SmartConfigRaw = z.infer<typeof SmartConfigRawSchema>;
 
 export const StreamDeliverySchema = z.object({
   url: z.string().url(),
