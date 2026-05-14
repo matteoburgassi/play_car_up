@@ -1,5 +1,16 @@
-import { GalaxyResponseSchema, SmartConfigSchema } from './types';
-import type { GalaxyResponse, SmartConfig } from './types';
+import {
+  GalaxyRawResponseSchema,
+  GalaxyResponseSchema,
+  SmartConfigSchema,
+} from './types';
+import type {
+  GalaxyRawItem,
+  GalaxyRawResponse,
+  GalaxyResponse,
+  Media,
+  SmartConfig,
+  StreamDelivery,
+} from './types';
 import { MOCK_GALAXY, MOCK_SMART_CONFIG } from './mock';
 
 export type GalaxyMode = 'mock' | 'live';
@@ -7,24 +18,38 @@ export type GalaxyMode = 'mock' | 'live';
 export interface GalaxyEnv {
   smartConfigUrl?: string;
   galaxyBaseUrl?: string;
-  authHeader?: string;
+  apiKey?: string;
+  apiSecretKey?: string;
+  campaignId?: string;
+  languageCode?: string;
+  countryCode?: string;
+  rubricId?: string;
 }
 
 export function resolveMode(env: GalaxyEnv): GalaxyMode {
-  return env.smartConfigUrl || env.galaxyBaseUrl ? 'live' : 'mock';
+  return env.galaxyBaseUrl && env.apiKey && env.apiSecretKey ? 'live' : 'mock';
 }
 
 export async function loadSmartConfig(env: GalaxyEnv): Promise<SmartConfig> {
   if (resolveMode(env) === 'mock') return MOCK_SMART_CONFIG;
   if (env.smartConfigUrl) {
-    const res = await fetch(env.smartConfigUrl, { headers: authHeaders(env) });
+    const res = await fetch(env.smartConfigUrl);
     if (!res.ok) throw new Error(`SmartConfig failed: ${res.status}`);
     return SmartConfigSchema.parse(await res.json());
   }
-  return SmartConfigSchema.parse({
-    galaxyBaseUrl: env.galaxyBaseUrl!,
-    authHeader: env.authHeader ?? '',
-  });
+  return SmartConfigSchema.parse({ galaxyBaseUrl: env.galaxyBaseUrl! });
+}
+
+export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {
+  const base = `${config.galaxyBaseUrl.replace(/\/$/, '')}${config.rubricPath}`;
+  const params = new URLSearchParams();
+  if (env.apiKey) params.set('api_key', env.apiKey);
+  if (env.apiSecretKey) params.set('api_secret_key', env.apiSecretKey);
+  if (env.campaignId) params.set('campaign_id', env.campaignId);
+  if (env.languageCode) params.set('language_code', env.languageCode);
+  if (env.countryCode) params.set('country_code', env.countryCode);
+  if (env.rubricId) params.set('rubric_id', env.rubricId);
+  return `${base}?${params.toString()}`;
 }
 
 export async function fetchGalaxyRubric(
@@ -32,15 +57,54 @@ export async function fetchGalaxyRubric(
   config: SmartConfig,
 ): Promise<GalaxyResponse> {
   if (resolveMode(env) === 'mock') return MOCK_GALAXY;
-  const url = `${config.galaxyBaseUrl.replace(/\/$/, '')}${config.rubricPath}`;
-  const res = await fetch(url, { headers: authHeaders(env, config) });
+  const url = buildRubricUrl(env, config);
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`Galaxy rubric failed: ${res.status}`);
-  return GalaxyResponseSchema.parse(await res.json());
+  const raw = GalaxyRawResponseSchema.parse(await res.json());
+  return GalaxyResponseSchema.parse(normalizeGalaxy(raw));
 }
 
-function authHeaders(env: GalaxyEnv, config?: SmartConfig): Record<string, string> {
-  const h: Record<string, string> = { Accept: 'application/json' };
-  const auth = env.authHeader ?? config?.authHeader;
-  if (auth) h.Authorization = auth;
-  return h;
+function normalizeGalaxy(raw: GalaxyRawResponse): GalaxyResponse {
+  const list = raw.items ?? raw.medias ?? raw.data ?? [];
+  const items: Media[] = list.map(toMedia).filter((m): m is Media => !!m);
+  const rubric = raw.rubric_label ?? raw.rubric_name ?? raw.name ?? 'Featured';
+  return { rubric, items };
+}
+
+function toMedia(r: GalaxyRawItem): Media | null {
+  const id = String(r.id ?? r.media_id ?? '');
+  const title = r.title ?? r.name ?? '';
+  if (!id || !title) return null;
+  const deliveries: StreamDelivery[] = (r.deliveries ?? []).map((d) => ({
+    url: d.url,
+    mime: d.mime,
+    extension: d.extension,
+    kind: normalizeKind(d.kind),
+  }));
+  const streamUrl = r.stream_url ?? r.url;
+  const typeRaw = (r.media_type ?? r.type ?? 'audio').toLowerCase();
+  const type: Media['type'] = typeRaw.includes('video') ? 'video' : 'audio';
+  const durationMs =
+    typeof r.duration_ms === 'number'
+      ? r.duration_ms
+      : typeof r.duration === 'number'
+        ? Math.round(r.duration * 1000)
+        : undefined;
+  return {
+    id,
+    title,
+    artist: r.artist ?? r.author ?? '',
+    artworkUrl: r.artwork_url ?? r.image_url ?? r.thumbnail ?? '',
+    durationMs,
+    type,
+    deliveries,
+    streamUrl,
+  };
+}
+
+function normalizeKind(k?: string): StreamDelivery['kind'] {
+  const v = (k ?? '').toLowerCase();
+  if (v === 'preview') return 'preview';
+  if (v === 'automotive' || v === 'auto') return 'automotive';
+  return 'full';
 }

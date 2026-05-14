@@ -2,8 +2,7 @@ import type { GalaxyResponse, SmartConfig } from './types';
 
 export const MOCK_SMART_CONFIG: SmartConfig = {
   galaxyBaseUrl: 'https://mock.local/galaxy',
-  authHeader: '',
-  rubricPath: '/rubrics/featured',
+  rubricPath: '/publishing-rubric-list',
 };
 
 const SAMPLE = 'https://commondatastorage.googleapis.com/codeskulptor-demos/DDR_assets/Sevish_-__nbsp_.mp3';
