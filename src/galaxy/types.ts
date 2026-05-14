@@ -26,7 +26,11 @@ export const MediaSchema = z.object({
   id: z.string(),
   title: z.string(),
   artist: z.string().default(''),
-  artworkUrl: z.string().url().optional().default(''),
+  artworkUrl: z
+    .string()
+    .optional()
+    .default('')
+    .transform((v) => (v && /^https?:\/\//i.test(v) ? v : '')),
   durationMs: z.number().int().nonnegative().optional(),
   type: z.enum(['audio', 'video']).default('audio'),
   deliveries: z.array(StreamDeliverySchema).default([]),
