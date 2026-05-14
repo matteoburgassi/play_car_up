@@ -100,7 +100,7 @@ export function App() {
           <div className="brand-mark">P</div>
           <div>
             <h1>PlayUP</h1>
-            <small>Galaxy POC</small>
+            <small>Expo Carplay POC</small>
           </div>
         </div>
         <span className={`mode-pill ${mode}`}>{mode === 'live' ? 'Live' : 'Mock'}</span>
