@@ -189,15 +189,24 @@ export async function fetchGalaxyRubric(
 }
 
 function normalizeGalaxy(raw: GalaxyRawResponse): GalaxyResponse {
-  const list = raw.items ?? raw.medias ?? raw.data ?? [];
+  const list = extractItemList(raw);
   const items: Media[] = list.map(toMedia).filter((m): m is Media => !!m);
   const rubric = raw.rubric_label ?? raw.rubric_name ?? raw.name ?? 'Featured';
   return { rubric, items };
 }
 
+function extractItemList(raw: GalaxyRawResponse): GalaxyRawItem[] {
+  if (raw.items?.length) return raw.items;
+  if (raw.medias?.length) return raw.medias;
+  const d = raw.data;
+  if (Array.isArray(d)) return d;
+  if (d && typeof d === 'object') return d.data ?? d.items ?? [];
+  return [];
+}
+
 function toMedia(r: GalaxyRawItem): Media | null {
-  const id = String(r.id ?? r.media_id ?? '');
-  const title = r.title ?? r.name ?? '';
+  const id = String(r.id ?? r.media_id ?? r.rubric_id ?? '');
+  const title = r.title ?? r.name ?? r.rubric_label ?? r.rubric_title ?? '';
   if (!id || !title) return null;
   const deliveries: StreamDelivery[] = (r.deliveries ?? []).map((d) => ({
     url: d.url,
@@ -214,11 +223,21 @@ function toMedia(r: GalaxyRawItem): Media | null {
       : typeof r.duration === 'number'
         ? Math.round(r.duration * 1000)
         : undefined;
+  const artworkUrl =
+    r.artwork_url ??
+    r.image_url ??
+    r.thumbnail ??
+    r.preview_large ??
+    r.preview_medium ??
+    r.preview_small ??
+    '';
+  const artist =
+    r.artist ?? r.author ?? (r.rubric_content_type?.filter(Boolean).join(', ') ?? '');
   return {
     id,
     title,
-    artist: r.artist ?? r.author ?? '',
-    artworkUrl: r.artwork_url ?? r.image_url ?? r.thumbnail ?? '',
+    artist,
+    artworkUrl,
     durationMs,
     type,
     deliveries,
