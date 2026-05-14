@@ -157,8 +157,11 @@ function pickString(o: Record<string, unknown>, keys: string[]): string | undefi
 }
 
 export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {
-  const galaxyBase = viaDevProxy(config.galaxyBaseUrl, '/galaxy-proxy');
-  const base = `${galaxyBase.replace(/\/$/, '')}${config.rubricPath}`;
+  const galaxyBase = viaDevProxy(config.galaxyBaseUrl, '/galaxy-proxy').replace(/\/+$/, '');
+  const rubricPath = config.rubricPath.startsWith('/')
+    ? config.rubricPath
+    : `/${config.rubricPath}`;
+  const base = `${galaxyBase}${rubricPath}`;
   const params = new URLSearchParams({
     api_key: env.apiKey ?? '',
     api_secret_key: env.apiSecretKey ?? '',
