@@ -190,6 +190,9 @@ export function buildContentListUrl(
 ): string {
   const params = commonGalaxyParams(env, config);
   params.set('rubric_id', rubricId);
+  params.set('delivery', 'true');
+  params.set('asset', 'true');
+  params.set('asset_signed_url', 'true');
   return `${galaxyEndpoint(config, '/publishing-content-list')}?${params.toString()}`;
 }
 
