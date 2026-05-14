@@ -280,7 +280,12 @@ function toMedia(r: GalaxyRawItem): Media | null {
     r.preview_medium ??
     r.preview_small ??
     '';
+  const firstAuthor =
+    extractFirstName(r.authors) ??
+    extractFirstName(r.author_list) ??
+    extractFirstName(r.artists);
   const artist =
+    firstAuthor ??
     r.artist ??
     r.author ??
     r.artist_label ??
@@ -351,6 +356,25 @@ function extractDeliveries(raw: unknown): StreamDelivery[] {
     out.push({ url: e.url, mime, extension: ext, kind: normalizeKind(kindHint) });
   }
   return out;
+}
+
+function extractFirstName(raw: unknown): string | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === 'string') return raw.trim() || undefined;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const first = raw[0];
+  if (typeof first === 'string') return first.trim() || undefined;
+  if (isObject(first)) {
+    for (const key of ['label', 'name', 'full_name', 'fullname', 'title']) {
+      const v = first[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    const fn = typeof first.first_name === 'string' ? first.first_name.trim() : '';
+    const ln = typeof first.last_name === 'string' ? first.last_name.trim() : '';
+    const combined = [fn, ln].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+  }
+  return undefined;
 }
 
 function extractCoverUrl(assets: unknown): string | undefined {

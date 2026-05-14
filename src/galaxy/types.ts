@@ -74,6 +74,9 @@ export const GalaxyRawItemSchema = z
     provider_label: z.string().optional(),
     editor_label: z.string().optional(),
     artist_label: z.string().optional(),
+    authors: z.unknown().optional(),
+    author_list: z.unknown().optional(),
+    artists: z.unknown().optional(),
     /**
      * Deliveries can be:
      *  - an array of `{ url, mime?, extension?, kind? }` (legacy shape), or
