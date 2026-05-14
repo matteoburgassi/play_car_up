@@ -46,13 +46,13 @@ export function resolveMode(env: GalaxyEnv): GalaxyMode {
  */
 function viaDevProxy(rawUrl: string, prefix: '/smartconfig-proxy' | '/galaxy-proxy'): string {
   if (!isDev()) return rawUrl;
+  // In dev the proxy prefix already maps to the upstream host. For galaxy the
+  // rubric path is appended later, so we always return just the prefix.
+  if (prefix === '/galaxy-proxy') return prefix;
   if (rawUrl.startsWith('/')) return rawUrl;
   try {
     const u = new URL(rawUrl);
-    // For galaxy, the rubric path is appended separately, so we drop the
-    // upstream pathname to avoid producing `/galaxy-proxy/<path>/publishing-...`.
-    const pathname = prefix === '/galaxy-proxy' ? '' : u.pathname;
-    return `${prefix}${pathname}${u.search}${u.hash}`;
+    return `${prefix}${u.pathname}${u.search}${u.hash}`;
   } catch {
     return rawUrl;
   }
