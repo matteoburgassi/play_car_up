@@ -33,6 +33,26 @@ export function resolveMode(env: GalaxyEnv): GalaxyMode {
   return env.apiKey && env.apiSecretKey && env.smartConfigUrl ? 'live' : 'mock';
 }
 
+/**
+ * In dev, browsers can't reach SmartConfig / Galaxy directly because of CORS.
+ * Rewrite absolute URLs to relative `/smartconfig-proxy/*` and `/galaxy-proxy/*`
+ * paths so the Vite dev proxy handles the upstream call.
+ */
+function viaDevProxy(rawUrl: string, prefix: '/smartconfig-proxy' | '/galaxy-proxy'): string {
+  if (!isDev()) return rawUrl;
+  if (rawUrl.startsWith('/')) return rawUrl;
+  try {
+    const u = new URL(rawUrl);
+    return `${prefix}${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function isDev(): boolean {
+  return typeof import.meta !== 'undefined' && Boolean((import.meta as ImportMeta).env?.DEV);
+}
+
 export function buildSmartConfigUrl(env: GalaxyEnv): string {
   const params = new URLSearchParams({
     login: env.smartConfigLogin ?? '',
@@ -40,14 +60,14 @@ export function buildSmartConfigUrl(env: GalaxyEnv): string {
     application_id: env.smartConfigApplicationId ?? '',
     wanted_version: env.smartConfigWantedVersion ?? '',
   });
-  return `${env.smartConfigUrl}?${params.toString()}`;
+  const base = viaDevProxy(env.smartConfigUrl ?? '', '/smartconfig-proxy');
+  return `${base}?${params.toString()}`;
 }
 
 export async function loadSmartConfig(env: GalaxyEnv): Promise<SmartConfig> {
   if (resolveMode(env) === 'mock') return MOCK_SMART_CONFIG;
   const res = await fetch(buildSmartConfigUrl(env), {
     headers: { Accept: 'application/json' },
-    credentials: 'include',
   });
   if (!res.ok) throw new Error(`SmartConfig failed: ${res.status}`);
   const raw = (await res.json()) as Record<string, unknown>;
@@ -99,7 +119,8 @@ function pickString(o: Record<string, unknown>, keys: string[]): string | undefi
 }
 
 export function buildRubricUrl(env: GalaxyEnv, config: SmartConfig): string {
-  const base = `${config.galaxyBaseUrl.replace(/\/$/, '')}${config.rubricPath}`;
+  const galaxyBase = viaDevProxy(config.galaxyBaseUrl, '/galaxy-proxy');
+  const base = `${galaxyBase.replace(/\/$/, '')}${config.rubricPath}`;
   const params = new URLSearchParams({
     api_key: env.apiKey ?? '',
     api_secret_key: env.apiSecretKey ?? '',
